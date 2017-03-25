@@ -5,26 +5,25 @@
             [clojure.core.unify :as u]))
 
 (s/def ::definition
-  (s/keys :req [::event ::on ::effect]
-          :opt [::where]))
+  (s/keys :req [::event ::action ::effect]
+          :opt [::precondition ::context]))
 
 (s/def ::event
   (s/tuple keyword? ::args))
 
-(s/def ::on
-  (s/or :ea (s/tuple keyword? ::args)
-        :eac (s/tuple keyword? ::args ::context)))
+(s/def ::action
+  (s/tuple keyword? ::args))
 
 (s/def ::args
   (s/map-of keyword? :datalog/variable))
 
-(s/def ::context
-  ::args)
-
 (s/def ::effect
   (s/coll-of :datalog/data-pattern :min-size 1))
 
-(s/def ::where
+(s/def ::context
+  :datomic.query.kv/where)
+
+(s/def ::precondition
   :datomic.query.kv/where)
 
 (s/def ::ground-args
@@ -34,8 +33,7 @@
   ::ground-args)
 
 (s/def ::ground-event
-  (s/or :ea (s/tuple keyword? ::ground-args)
-        :eac (s/tuple keyword? ::ground-args ::ground-context)))
+  (s/tuple keyword? ::ground-args))
 
 (s/fdef fire
         :args (s/cat :rule ::definition
@@ -58,11 +56,11 @@
 
 (defn fire
   [rule db ground-event]
-  (let [{:keys [::event ::on ::effect ::where]} rule]
-    (when-let [args (u/unify on ground-event)]
+  (let [{:keys [::event ::action ::effect ::context ::precondition]} rule]
+    (when-let [args (u/unify action ground-event)]
       (let [find (vec (lvars event))
             in (vector '$ (vec (keys args)))
-            q {:find find :in in :where where}]
+            q {:find find :in in :where context}]
         (when-let [matches (seq (map (fn [match]
                                        (zipmap find match))
                                      (d/q q db (vals args))))]

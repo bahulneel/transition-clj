@@ -28,11 +28,11 @@
 
 (def create-customer
   '#:transition.rule
-      {:event  [::customer-created #:customer {:name ?name :id ?id}]
-       :on     [::create-customer #:customer {:name ?name}]
-       :where  [
-                [(datomic.api/squuid) ?id]]
-       :effect [#:customer {:name ?name :id ?id}]})
+      {:event        [::customer-created #:customer {:name ?name :id ?id}]
+       :action       [::create-customer #:customer {:name ?name}]
+       :precondition [(not [_ :customer/name ?name])]
+       :context      [[(datomic.api/squuid) ?id]]
+       :effect       [#:customer {:name ?name :id ?id}]})
 
 (t/deftest rule-firing
   (t/testing "firing a matching rule with no conflicts"
@@ -47,5 +47,13 @@
       (t/is (= [[::customer-created #:customer {:name name :id id}]]
                events))))
 
-  (t/testing "firing a matching rule with a failed precondiiton")
+  (t/testing "firing a matching rule with a failed precondiiton"
+    (let [id (d/squuid)
+          name "Ford Prefect"
+          db (db-with (empty-db ::db schema)
+                      [#:customer {:name name :id id}])
+          event [::create-customer #:customer {:name name}]
+          [tx events] (rule/fire create-customer db event)]
+      (t/is (empty? tx))
+      (t/is (empty? events))))
   (t/testing "firing a matching rule with conditional effects"))
