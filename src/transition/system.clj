@@ -47,8 +47,7 @@
 
 (s/fdef trigger
         :args (s/cat :system ::system
-                     :event ::event
-                     :context ::context)
+                     :event (s/tuple ::event ::context))
         :ret (s/coll-of ::trigger))
 
 (s/fdef fire
@@ -69,7 +68,7 @@
   (update system ::rules conj rule))
 
 (defn trigger
-  [system event context]
+  [system [event context]]
   (let [{:keys [::conn ::rules]} system]
     (map (fn [rule]
            {::conn   conn
@@ -116,9 +115,11 @@
         {:keys [::attempt ::max-attempts]} context]
     (< attempt max-attempts)))
 
-(def workflow
-  {::trigger  [:sync ::in (mapcat (partial apply trigger))]
-   ::fire     [:async #{::trigger ::retry?} (map fire)]
+(defn workflow
+  [system]
+  {::trigger  [:sync ::event (mapcat (partial trigger system))]
+   ::work     [:merge [::retry? ::trigger] :priority true]
+   ::fire     [:async (map fire)]
    ::affect   [:blocking ::fire (map affect)]
    ::success? [:sync ::affect (filter success?)]
    ::failure? [:sync ::affect (remove success?)]
