@@ -28,11 +28,11 @@
 
 (def create-customer
   '#:transition.rule
-      {:event        [::customer-created #:customer {:name ?name :id ?id}]
-       :action       [::create-customer #:customer {:name ?name}]
+      {:action       [::create-customer #:customer {:name ?name}]
        :precondition [(not [_ :customer/name ?name])]
        :context      [[(datomic.api/squuid) ?id]]
-       :effect       [#:customer {:name ?name :id ?id}]})
+       :effect       [#:customer {:name ?name :id ?id}]
+       :event        [::customer-created #:customer {:name ?name :id ?id}]})
 
 (t/deftest rule-firing
   (t/testing "firing a matching rule with no conflicts"
