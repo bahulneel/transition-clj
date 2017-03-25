@@ -2,7 +2,8 @@
   (:require [transition.rule :as rule]
             [clojure.test :as t]
             [clojure.spec.test :as stest]
-            [datomic.api :as d]))
+            [datomic.api :as d])
+  (:import (clojure.lang ExceptionInfo)))
 
 (stest/instrument)
 
@@ -15,7 +16,9 @@
   (let [uri (str "datomic:mem://" name)]
     (d/delete-database uri)
     (d/create-database uri)
-    (db-with (d/db (d/connect uri)) schema)))
+    (-> (d/db (d/connect uri))
+        (db-with rule/schema)
+        (db-with schema))))
 
 (def schema
   [{:db/ident       :customer/name
@@ -41,8 +44,12 @@
           id (d/squuid)
           event [::create-customer #:customer {:name name}]
           [tx events] (with-redefs [datomic.api/squuid (constantly id)]
-                        (rule/fire create-customer db event))]
-      (t/is (= [#:customer {:name name :id id}]
+                        (rule/fire create-customer db event))
+          db' (db-with db tx)]
+      (t/is (= [[:transition.rule/applicable?
+                 (get create-customer :transition.rule/precondition)
+                 '{?name "Ford Prefect"}]
+                #:customer {:name name :id id}]
                tx))
       (t/is (= [[::customer-created #:customer {:name name :id id}]]
                events))))
@@ -53,6 +60,19 @@
           db (db-with (empty-db ::db schema)
                       [#:customer {:name name :id id}])
           event [::create-customer #:customer {:name name}]
-          [tx events] (rule/fire create-customer db event)]
+          [tx events] (rule/fire create-customer db event)
+          db' (db-with db tx)]
       (t/is (empty? tx))
-      (t/is (empty? events)))))
+      (t/is (empty? events))))
+  (t/testing "firing a rule then transacting twice"
+    (let [db (empty-db ::db schema)
+          name "Ford Prefect"
+          id (d/squuid)
+          event [::create-customer #:customer {:name name}]
+          [tx events] (with-redefs [datomic.api/squuid (constantly id)]
+                        (rule/fire create-customer db event))
+          db' (db-with db tx)]
+      (t/is (thrown-with-msg? ExceptionInfo
+                              #"TX no longer applicable"
+                              (db-with db' tx))))))
+

@@ -63,13 +63,30 @@
                 (zipmap find match))
               (d/q q db (vals args))))))
 
+(def schema
+  '[{:db/ident ::applicable?
+     :db/fn #db/fn {:lang   "clojure"
+                    :params [db precondition data]
+                    :code   (let [ks (vec (keys data))
+                                  vs (vec (vals data))
+                                  q {:find  ks
+                                     :in    ['$ ks]
+                                     :where precondition}
+                                  applicable? (seq (datomic.api/q q db vs))]
+                              (when-not applicable?
+                                (throw (ex-info "TX no longer applicable"
+                                                {:precondition precondition
+                                                 :data         data}))))}}])
+
 (defn fire
   [rule db ground-event]
   (let [{:keys [::event ::action ::effect ::context ::precondition]} rule
-        args (u/unify action ground-event)]
-    (when-let [matches (and args
-                            (seq (unify-event action db args precondition))
-                            (unify-event event db args context))]
-      (let [tx (mapcat #(u/subst effect %) matches)
+        args (u/unify action ground-event)
+        tx (and args (->> (unify-event action db args precondition)
+                          (map #(merge args %))
+                          (map #(vector ::applicable? precondition %))
+                          seq))]
+    (when-let [matches (and tx (unify-event event db args context))]
+      (let [tx (into (vec tx) (mapcat #(u/subst effect %) matches))
             events (map #(u/subst event %) matches)]
         [tx events]))))
