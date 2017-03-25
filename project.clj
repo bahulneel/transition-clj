@@ -5,4 +5,5 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0-alpha14"]
                  [lab79/datomic-spec "0.2.0-alpha6"]
+                 [org.clojure/core.unify "0.5.7"]
                  [com.datomic/datomic-free "0.9.5561"]])
