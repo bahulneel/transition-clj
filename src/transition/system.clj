@@ -1,0 +1,97 @@
+(ns transition.system
+  (:require [transition.rule :as rule]
+            [datomic.api :as d]
+            [clojure.spec :as s]))
+
+(s/def ::conn any?)
+
+(s/def ::rule
+  ::rule/definition)
+
+(s/def ::event
+  ::rule/ground-event)
+
+(s/def ::events
+  (s/coll-of ::event))
+
+(s/def ::rules
+  (s/coll-of ::rule :kind set?))
+
+(s/def ::system
+  (s/keys :req [::conn ::rules]))
+
+(s/def ::trigger
+  (s/keys :req [::conn ::event ::context ::rule]))
+
+(s/def ::effect
+  (s/keys :req [::trigger ::tx ::events]))
+
+(s/def ::success
+  (s/keys :req [::context ::events]))
+
+(s/def ::failure
+  (s/keys :req [::trigger ::error]))
+
+(s/fdef system
+        :args (s/cat :conn ::conn)
+        :ret ::system)
+
+(s/fdef add-rule
+        :args (s/cat :system ::system
+                     :rule ::rule)
+        :ret ::system)
+
+(s/fdef trigger
+        :args (s/cat :system ::system
+                     :event ::event
+                     :context ::context)
+        :ret (s/coll-of ::trigger))
+
+(s/fdef fire
+        :args (s/cat :trigger ::trigger)
+        :ret ::effect)
+
+(s/fdef affect
+        :args (s/cat :effect ::effect)
+        :ret (s/or :success ::success
+                   :failure ::failure))
+(defn system
+  [conn]
+  {::conn  conn
+   ::rules #{}})
+
+(defn add-rule
+  [system rule]
+  (update system ::rules conj rule))
+
+(defn trigger
+  [system event context]
+  (let [{:keys [::conn ::rules]} system]
+    (map (fn [rule]
+           {::conn conn
+            ::event event
+            ::contxt context
+            ::rule rule})
+         rules)))
+
+(defn fire
+  [trigger]
+  (let [{:keys [::conn ::event ::rule]} trigger
+        db (d/db conn)
+        [tx events] (rule/fire rule db event)]
+    {::trigger trigger
+     ::tx tx
+     ::events events}))
+
+(defn affect
+  [effect]
+  (let [{:keys [::trigger ::tx ::events]} effect
+        {:keys [::conn ::context]} trigger
+        tx-report (d/transact conn tx)]
+    (try
+      @tx-report
+      {::context context
+       ::events ::events}
+      (catch Exception e
+        {::trigger trigger
+         ::error e}))))
