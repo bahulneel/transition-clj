@@ -4,6 +4,8 @@
             [clojure.spec.test :as stest]
             [datomic.api :as d]))
 
+(stest/instrument)
+
 (defn db-with
   [db tx]
   (:db-after (d/with db tx)))
@@ -39,12 +41,11 @@
           id (d/squuid)
           event [::create-customer #:customer {:name name}]
           [tx events] (with-redefs [datomic.api/squuid (constantly id)]
-                        (rule/fire create-customer db event))
-          db' (db-with db tx)]
+                        (rule/fire create-customer db event))]
       (t/is (= [#:customer {:name name :id id}]
                tx))
       (t/is (= [[::customer-created #:customer {:name name :id id}]]
                events))))
 
-  (t/testing "firing a matching rule with conflicts")
+  (t/testing "firing a matching rule with a failed precondiiton")
   (t/testing "firing a matching rule with conditional effects"))

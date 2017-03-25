@@ -27,6 +27,21 @@
 (s/def ::where
   :datomic.query.kv/where)
 
+(s/def ::ground-args
+  (s/map-of keyword? :datomic-spec.value/any))
+
+(s/def ::ground-context
+  ::ground-args)
+
+(s/def ::ground-event
+  (s/or :ea (s/tuple keyword? ::ground-args)
+        :eac (s/tuple keyword? ::ground-args ::ground-context)))
+
+(s/fdef fire
+        :args (s/cat :rule ::definition
+                     :db any?
+                     :event ::ground-event))
+
 (defn lvar?
   [x]
   (and (symbol? x)
@@ -41,9 +56,10 @@
     (lvar? x) [x]
     :else nil))
 
-(defn fire [rule db observed-event]
+(defn fire
+  [rule db ground-event]
   (let [{:keys [::event ::on ::effect ::where]} rule]
-    (when-let [args (u/unify on observed-event)]
+    (when-let [args (u/unify on ground-event)]
       (let [find (vec (lvars event))
             in (vector '$ (vec (keys args)))
             q {:find find :in in :where where}]
