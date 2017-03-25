@@ -55,5 +55,4 @@
           event [::create-customer #:customer {:name name}]
           [tx events] (rule/fire create-customer db event)]
       (t/is (empty? tx))
-      (t/is (empty? events))))
-  (t/testing "firing a matching rule with conditional effects"))
+      (t/is (empty? events)))))
