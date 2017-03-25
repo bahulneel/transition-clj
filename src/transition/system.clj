@@ -27,10 +27,14 @@
   (s/keys :req [::trigger ::tx ::events]))
 
 (s/def ::success
-  (s/keys :req [::context ::events]))
+  (s/keys :req [::context ::events ::tx-report]))
 
 (s/def ::failure
   (s/keys :req [::trigger ::error]))
+
+(s/def ::context
+  (s/keys :req [::max-attempts]
+          :opt [::attempt]))
 
 (s/fdef system
         :args (s/cat :conn ::conn)
@@ -68,20 +72,21 @@
   [system event context]
   (let [{:keys [::conn ::rules]} system]
     (map (fn [rule]
-           {::conn conn
-            ::event event
+           {::conn   conn
+            ::event  event
             ::contxt context
-            ::rule rule})
+            ::rule   rule})
          rules)))
 
 (defn fire
   [trigger]
   (let [{:keys [::conn ::event ::rule]} trigger
         db (d/db conn)
-        [tx events] (rule/fire rule db event)]
-    {::trigger trigger
-     ::tx tx
-     ::events events}))
+        [tx events] (rule/fire rule db event)
+        trigger' (update trigger ::attempt (fnil inc 0))]
+    {::trigger trigger'
+     ::tx      tx
+     ::events  events}))
 
 (defn affect
   [effect]
@@ -89,9 +94,33 @@
         {:keys [::conn ::context]} trigger
         tx-report (d/transact conn tx)]
     (try
-      @tx-report
-      {::context context
-       ::events ::events}
+      {::context   context
+       ::events    ::events
+       ::tx-report @tx-report}
       (catch Exception e
         {::trigger trigger
-         ::error e}))))
+         ::error   e}))))
+
+(defn success?
+  [x]
+  (s/valid? ::success x))
+
+(defn failure?
+  [x]
+  (s/valid? ::failure x))
+
+(defn retry?
+  [failure]
+  (when (failure? failure))
+  (let [{:keys [::context]} failure
+        {:keys [::attempt ::max-attempts]} context]
+    (< attempt max-attempts)))
+
+(def workflow
+  {::trigger  [:sync ::in (mapcat (partial apply trigger))]
+   ::fire     [:async #{::trigger ::retry?} (map fire)]
+   ::affect   [:blocking ::fire (map affect)]
+   ::success? [:sync ::affect (filter success?)]
+   ::failure? [:sync ::affect (remove success?)]
+   ::retry?   [:sync ::failure? (filter retry?)]
+   ::error?   [:sync ::failure? (remove retry?)]})
