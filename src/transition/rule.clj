@@ -54,16 +54,22 @@
     (lvar? x) [x]
     :else nil))
 
+(defn unify-event
+  [event db args context]
+  (let [find (vec (lvars event))
+        in (vector '$ (vec (keys args)))
+        q {:find find :in in :where context}]
+    (seq (map (fn [match]
+                (zipmap find match))
+              (d/q q db (vals args))))))
+
 (defn fire
   [rule db ground-event]
-  (let [{:keys [::event ::action ::effect ::context ::precondition]} rule]
-    (when-let [args (u/unify action ground-event)]
-      (let [find (vec (lvars event))
-            in (vector '$ (vec (keys args)))
-            q {:find find :in in :where context}]
-        (when-let [matches (seq (map (fn [match]
-                                       (zipmap find match))
-                                     (d/q q db (vals args))))]
-          (let [tx (mapcat #(u/subst effect %) matches)
-                events (map #(u/subst event %) matches)]
-            [tx events]))))))
+  (let [{:keys [::event ::action ::effect ::context ::precondition]} rule
+        args (u/unify action ground-event)]
+    (when-let [matches (and args
+                            (seq (unify-event action db args precondition))
+                            (unify-event event db args context))]
+      (let [tx (mapcat #(u/subst effect %) matches)
+            events (map #(u/subst event %) matches)]
+        [tx events]))))
