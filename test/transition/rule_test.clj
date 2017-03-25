@@ -35,7 +35,7 @@
        :event        [::customer-created #:customer {:name ?name :id ?id}]})
 
 (t/deftest rule-firing
-  (t/testing "firing a matching rule with no conflicts"
+  (t/testing "firing a matching rule with a met precondition"
     (let [db (empty-db ::db schema)
           name "Ford Prefect"
           id (d/squuid)
