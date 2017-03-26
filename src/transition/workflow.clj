@@ -128,7 +128,6 @@
     (a/pipeline-blocking 1 sink-c xf source-c)
     [sink-c sink-m]))
 
-
 (defmethod build-step :merge
   [sources [_ inputs]]
   (let [source-cs (map #(tap-source sources %) inputs)

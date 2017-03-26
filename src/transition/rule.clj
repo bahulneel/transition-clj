@@ -65,18 +65,18 @@
 
 (def schema
   '[{:db/ident ::applicable?
-     :db/fn #db/fn {:lang   "clojure"
-                    :params [db precondition data]
-                    :code   (let [ks (vec (keys data))
-                                  vs (vec (vals data))
-                                  q {:find  ks
-                                     :in    ['$ ks]
-                                     :where precondition}
-                                  applicable? (seq (datomic.api/q q db vs))]
-                              (when-not applicable?
-                                (throw (ex-info "TX no longer applicable"
-                                                {:precondition precondition
-                                                 :data         data}))))}}])
+     :db/fn    #db/fn {:lang   "clojure"
+                       :params [db precondition data]
+                       :code   (let [ks (vec (keys data))
+                                     vs (vec (vals data))
+                                     q {:find  ks
+                                        :in    ['$ ks]
+                                        :where precondition}
+                                     applicable? (seq (datomic.api/q q db vs))]
+                                 (when-not applicable?
+                                   (throw (ex-info "TX no longer applicable"
+                                                   {:precondition precondition
+                                                    :data         data}))))}}])
 
 (defn fire
   [rule db ground-event]

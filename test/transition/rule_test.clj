@@ -62,6 +62,7 @@
           event [::create-customer #:customer {:name name}]
           res (rule/fire create-customer db event)]
       (t/is (nil? res))))
+
   (t/testing "firing a rule then transacting twice"
     (let [db (empty-db ::db schema)
           name "Ford Prefect"
