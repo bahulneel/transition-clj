@@ -129,20 +129,21 @@
    ::success? [:sync ::affect (filter success?)]
    ::failure? [:sync ::affect (remove success?)]
    ::retry?   [:sync ::failure? (filter retry?)]
-   ::error?   [:sync ::failure? (remove retry?)]})
+   ::error?   [:sync ::failure? (remove retry?)]
+   ::out      [:merge [::success? ::error?]]})
 
 (defn start-system
   [system]
-  (let [sources (wf/init-workflow ::event)
+  (let [sources (wf/init-sources ::event)
         workflow (->> system
                       workflow
-                      (wf/start-workflow sources))]
+                      (wf/build-workflow sources))]
     (assoc system ::workflow workflow)))
 
 (defn stop-system!
   [system]
   (if-let [workflow (::workflow system)]
     (do
-      (wf/stop-workflow workflow)
+      (wf/stop-workflow! workflow)
       (dissoc system ::workflow))
     system))

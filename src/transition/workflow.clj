@@ -36,16 +36,16 @@
 (s/def ::sources
   (s/map-of keyword? ::source))
 
-(s/fdef init-workflow
+(s/fdef init-sources
         :args (s/cat :source keyword?)
         :ret ::sources)
 
-(s/fdef start-workflow
+(s/fdef build-workflow
         :args (s/cat :workflow ::workflow
                      :sources ::sources)
         :ret ::sources)
 
-(s/fdef stop-workflow
+(s/fdef stop-workflow!
         :args (s/cat :sources ::sources))
 
 (s/fdef step-applicable?
@@ -75,11 +75,11 @@
   (let [new-source (build-step sources step)]
     (assoc sources id new-source)))
 
-(defn init-workflow
+(defn init-sources
   [init-source]
   {init-source (a/chan)})
 
-(defn start-workflow
+(defn build-workflow
   [w sources]
   (loop [sources sources
          steps (seq w)]
@@ -91,7 +91,7 @@
         (recur next-sources next-steps))
       sources)))
 
-(defn stop-workflow
+(defn stop-workflow!
   [sources]
   (doseq [[id c] sources]
     (a/close! c)))
