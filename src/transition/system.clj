@@ -1,6 +1,7 @@
 (ns transition.system
   (:require [transition.rule :as rule]
             [transition.workflow :as wf]
+            [transition.event :as event]
             [datomic.api :as d]
             [clojure.spec :as s]))
 
@@ -10,7 +11,7 @@
   ::rule/definition)
 
 (s/def ::event
-  ::rule/ground-event)
+  ::event/definition)
 
 (s/def ::events
   (s/coll-of ::event))
@@ -64,6 +65,17 @@
         :ret (s/or :success ::success
                    :failure ::failure))
 
+(def schema
+  [{:db/ident       ::cause
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Event that cause the transition"}
+   {:db/ident       ::effect
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/many
+    :db/doc         "Side effect of the transition"}])
+
+
 (defn system
   [conn]
   {::conn  conn
@@ -91,16 +103,23 @@
         trigger' (update trigger ::attempt (fnil inc 0))]
     {::trigger trigger'
      ::tx      tx
-     ::events  events}))
+     ::events  (mapv #(event/event % event) events)}))
 
 (defn affect
   [effect]
   (let [{:keys [::trigger ::tx ::events]} effect
-        {:keys [::conn ::context]} trigger
-        {:keys [::tx-meta ::event-id]} context
-        tx-meta (-> tx-meta
-                    (assoc :db/id "datomic-tx"))
-        tx-report (d/transact conn (into tx [tx-meta]))]
+        {:keys [::conn ::context ::event]} trigger
+        {:keys [::tx-meta]} context
+        event-tx (map event/event>entity (into (or [event] [])
+                                               events))
+        tx-meta (cond-> {:db/id "datomic-tx"}
+                        tx-meta (merge tx-meta)
+                        event (assoc ::cause (event/id event))
+                        (seq events) (assoc ::effect (mapv event/id events)))
+
+        tx-report (d/transact conn (->> event-tx
+                                        (into [tx-meta])
+                                        (into tx)))]
     (try
       {::context   context
        ::events    ::events
