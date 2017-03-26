@@ -39,7 +39,7 @@
 
 (s/def ::context
   (s/keys :req [::max-attempts]
-          :opt [::attempt]))
+          :opt [::attempt ::tx-meta]))
 
 (s/fdef system
         :args (s/cat :conn ::conn)
@@ -63,6 +63,7 @@
         :args (s/cat :effect ::effect)
         :ret (s/or :success ::success
                    :failure ::failure))
+
 (defn system
   [conn]
   {::conn  conn
@@ -76,10 +77,10 @@
   [system [event context]]
   (let [{:keys [::conn ::rules]} system]
     (map (fn [rule]
-           {::conn   conn
-            ::event  event
-            ::contxt context
-            ::rule   rule})
+           {::conn    conn
+            ::event   event
+            ::context context
+            ::rule    rule})
          rules)))
 
 (defn fire
@@ -96,7 +97,10 @@
   [effect]
   (let [{:keys [::trigger ::tx ::events]} effect
         {:keys [::conn ::context]} trigger
-        tx-report (d/transact conn tx)]
+        {:keys [::tx-meta ::event-id]} context
+        tx-meta (-> tx-meta
+                    (assoc :db/id "datomic-tx"))
+        tx-report (d/transact conn (into tx [tx-meta]))]
     (try
       {::context   context
        ::events    ::events
