@@ -77,7 +77,8 @@
 
 (defn init-sources
   [init-source]
-  {init-source (a/chan)})
+  (let [source (a/chan)]
+    {init-source [source (a/mult source)]}))
 
 (defn build-workflow
   [w sources]
@@ -93,30 +94,44 @@
 
 (defn stop-workflow!
   [sources]
-  (doseq [[id c] sources]
+  (doseq [[id [c _]] sources]
     (a/close! c)))
+
+(defn tap-source
+  [sources source]
+  (let [source-m (get-in sources [source 1])
+        source-c (a/chan)]
+    (a/tap source-m source-c)
+    source-c))
 
 (defmethod build-step :sync
   [sources [_ source xf]]
-  (let [source-c (get sources source)
-        sink-c (a/chan 1)]
+  (let [source-c (tap-source sources source)
+        sink-c (a/chan 1)
+        sink-m (a/mult sink-c)]
     (a/pipeline 1 sink-c xf source-c)
-    sink-c))
+    [sink-c sink-m]))
 
 (defmethod build-step :async
   [sources [_ source xf]]
-  (let [source-c (get sources source)
-        sink-c (a/chan 1)]
+  (let [source-c (tap-source sources source)
+        sink-c (a/chan 1)
+        sink-m (a/mult sink-c)]
     (a/pipeline-async 1 sink-c xf source-c)
-    sink-c))
+    [sink-c sink-m]))
 
 (defmethod build-step :blocking
   [sources [_ source xf]]
-  (let [source-c (get sources source)
-        sink-c (a/chan 1)]
+  (let [source-c (tap-source sources source)
+        sink-c (a/chan 1)
+        sink-m (a/mult sink-c)]
     (a/pipeline-blocking 1 sink-c xf source-c)
-    sink-c))
+    [sink-c sink-m]))
+
 
 (defmethod build-step :merge
   [sources [_ inputs]]
-  (a/merge inputs))
+  (let [source-cs (map #(tap-source sources %) inputs)
+        sink-c (a/merge source-cs)
+        sink-m (a/mult sink-c)]
+    [sink-c sink-m]))
