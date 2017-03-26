@@ -92,6 +92,32 @@
         (recur next-sources next-steps))
       sources)))
 
+(defn put!
+  [sources source msg]
+  (let [done (promise)
+        source-c (get-in sources [source 0])]
+    (if source-c
+      (a/go (deliver done (a/>! source-c msg)))
+      (deliver done (ex-info "Not a source"
+                             {:source source
+                              :sources (keys sources)})))
+    done))
+
+(defn take!
+  [sources source]
+  (let [msg (promise)
+        source-m (get-in sources [source 1])]
+    (if source-m
+      (let [source-c (a/promise-chan)]
+        (a/go
+          (a/tap source-m source-c)
+          (deliver msg (a/<! source-c))
+          (a/untap source-m source-c)))
+      (deliver msg (ex-info "Not a source"
+                             {:source source
+                              :sources (keys sources)})))
+    msg))
+
 (defn stop-workflow!
   [sources]
   (doseq [[id [c _]] sources]
