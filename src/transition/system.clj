@@ -124,7 +124,7 @@
   [system]
   {::trigger  [:sync ::event (mapcat (partial trigger system))]
    ::work     [:merge [::retry? ::trigger]]
-   ::fire     [:sync (map fire)]
+   ::fire     [:sync (keep fire)]
    ::affect   [:blocking ::fire (map affect)]
    ::success? [:sync ::affect (filter success?)]
    ::failure? [:sync ::affect (remove success?)]

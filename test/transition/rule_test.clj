@@ -60,10 +60,8 @@
           db (db-with (empty-db ::db schema)
                       [#:customer {:name name :id id}])
           event [::create-customer #:customer {:name name}]
-          [tx events] (rule/fire create-customer db event)
-          db' (db-with db tx)]
-      (t/is (empty? tx))
-      (t/is (empty? events))))
+          res (rule/fire create-customer db event)]
+      (t/is (nil? res))))
   (t/testing "firing a rule then transacting twice"
     (let [db (empty-db ::db schema)
           name "Ford Prefect"
