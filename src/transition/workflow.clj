@@ -100,14 +100,14 @@
 (defn tap-source
   [sources source]
   (let [source-m (get-in sources [source 1])
-        source-c (a/chan)]
+        source-c (a/chan 1)]
     (a/tap source-m source-c)
     source-c))
 
 (defmethod build-step :sync
   [sources [_ source xf]]
   (let [source-c (tap-source sources source)
-        sink-c (a/chan 1)
+        sink-c (a/chan)
         sink-m (a/mult sink-c)]
     (a/pipeline 1 sink-c xf source-c)
     [sink-c sink-m]))
@@ -115,7 +115,7 @@
 (defmethod build-step :async
   [sources [_ source xf]]
   (let [source-c (tap-source sources source)
-        sink-c (a/chan 1)
+        sink-c (a/chan)
         sink-m (a/mult sink-c)]
     (a/pipeline-async 1 sink-c xf source-c)
     [sink-c sink-m]))
@@ -123,7 +123,7 @@
 (defmethod build-step :blocking
   [sources [_ source xf]]
   (let [source-c (tap-source sources source)
-        sink-c (a/chan 1)
+        sink-c (a/chan)
         sink-m (a/mult sink-c)]
     (a/pipeline-blocking 1 sink-c xf source-c)
     [sink-c sink-m]))
