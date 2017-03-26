@@ -1,5 +1,6 @@
 (ns transition.system
   (:require [transition.rule :as rule]
+            [transition.workflow :as wf]
             [datomic.api :as d]
             [clojure.spec :as s]))
 
@@ -17,8 +18,12 @@
 (s/def ::rules
   (s/coll-of ::rule :kind set?))
 
+(s/def ::workflow
+  ::wf/sources)
+
 (s/def ::system
-  (s/keys :req [::conn ::rules]))
+  (s/keys :req [::conn ::rules]
+          :opt [::workflow]))
 
 (s/def ::trigger
   (s/keys :req [::conn ::event ::context ::rule]))
@@ -118,10 +123,26 @@
 (defn workflow
   [system]
   {::trigger  [:sync ::event (mapcat (partial trigger system))]
-   ::work     [:merge [::retry? ::trigger] :priority true]
-   ::fire     [:async (map fire)]
+   ::work     [:merge [::retry? ::trigger]]
+   ::fire     [:sync (map fire)]
    ::affect   [:blocking ::fire (map affect)]
    ::success? [:sync ::affect (filter success?)]
    ::failure? [:sync ::affect (remove success?)]
    ::retry?   [:sync ::failure? (filter retry?)]
    ::error?   [:sync ::failure? (remove retry?)]})
+
+(defn start-system
+  [system]
+  (let [sources (wf/init-workflow ::event)
+        workflow (->> system
+                      workflow
+                      (wf/start-workflow sources))]
+    (assoc system ::workflow workflow)))
+
+(defn stop-system!
+  [system]
+  (if-let [workflow (::workflow system)]
+    (do
+      (wf/stop-workflow workflow)
+      (dissoc system ::workflow))
+    system))
