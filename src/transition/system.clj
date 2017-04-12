@@ -86,6 +86,7 @@
 
 (defn trigger
   [system [event context]]
+  (println "trigger" event context)
   (let [{:keys [::conn ::rules]} system]
     (map (fn [rule]
            {::conn    conn
