@@ -67,7 +67,7 @@
 
 (def build-step nil)
 
-(defmulti build-step (fn [_ [id [type]]]
+(defmulti build-step (fn [_ [type]]
                        type))
 
 (defn add-step
@@ -84,8 +84,8 @@
   [w sources]
   (loop [sources sources
          steps (seq w)]
-    (if-let [ready-steps (filter #(step-applicable? sources %)
-                                 steps)]
+    (if-let [ready-steps (seq (filter #(step-applicable? sources %)
+                                      steps))]
       (let [next-sources (reduce add-step sources ready-steps)
             next-steps (remove #(step-applicable? sources %)
                                steps)]

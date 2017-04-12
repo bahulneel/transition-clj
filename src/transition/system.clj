@@ -65,16 +65,15 @@
         :ret (s/or :success ::success
                    :failure ::failure))
 
-(def schema
-  [{:db/ident       ::cause
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/one
-    :db/doc         "Event that cause the transition"}
-   {:db/ident       ::effect
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/many
-    :db/doc         "Side effect of the transition"}])
-
+(def schema-txes
+  [[{:db/ident       ::cause
+     :db/valueType   :db.type/ref
+     :db/cardinality :db.cardinality/one
+     :db/doc         "Event that cause the transition"}
+    {:db/ident       ::effect
+     :db/valueType   :db.type/ref
+     :db/cardinality :db.cardinality/many
+     :db/doc         "Side effect of the transition"}]])
 
 (defn system
   [conn]
@@ -97,34 +96,45 @@
 
 (defn fire
   [trigger]
-  (let [{:keys [::conn ::event ::rule]} trigger
+  #_(println "fire" trigger)
+  (let [{:keys [::conn ::event ::rule ::context]} trigger
+        {:keys [::tx-meta]} context
         db (d/db conn)
-        [tx events] (rule/fire rule db event)
-        trigger' (update trigger ::attempt (fnil inc 0))]
-    {::trigger trigger'
-     ::tx      tx
-     ::events  (mapv #(event/event % event) events)}))
+        [tx events] (rule/fire rule db (::event/event event) tx-meta)
+        trigger' (update-in trigger [::context ::attempt] (fnil inc 0))]
+    (when (or (seq tx) (seq events))
+      {::trigger trigger'
+       ::tx      tx
+       ::events  (mapv #(event/event % event) events)})))
 
 (defn affect
   [effect]
+  (println "affect")
+  #_(clojure.pprint/pprint effect)
   (let [{:keys [::trigger ::tx ::events]} effect
         {:keys [::conn ::context ::event]} trigger
         {:keys [::tx-meta]} context
-        event-tx (map event/event>entity (into (or [event] [])
+        event-tx (map event/event>entity (into (if event
+                                                 [event]
+                                                 [])
                                                events))
         tx-meta (cond-> {:db/id "datomic-tx"}
                         tx-meta (merge tx-meta)
-                        event (assoc ::cause (event/id event))
-                        (seq events) (assoc ::effect (mapv event/id events)))
+                        event (assoc ::cause (str (::event/id event)))
+                        (seq events) (assoc ::effect
+                                            (mapv (comp str ::event/id)
+                                                  events)))
 
         tx-report (d/transact conn (->> event-tx
                                         (into [tx-meta])
                                         (into tx)))]
+    #_(prn tx)
     (try
       {::context   context
-       ::events    ::events
+       ::events    events
        ::tx-report @tx-report}
       (catch Exception e
+       #_ (prn e)
         {::trigger trigger
          ::error   e}))))
 
@@ -138,29 +148,30 @@
 
 (defn retry?
   [failure]
-  (when (failure? failure))
-  (let [{:keys [::context]} failure
-        {:keys [::attempt ::max-attempts]} context]
-    (< attempt max-attempts)))
+  (when (failure? failure)
+    (let [{:keys [::context]} failure
+          {:keys [::attempt ::max-attempts]} context]
+      (< attempt max-attempts))))
 
 (defn workflow
   [system]
   {::trigger  [:sync ::event (mapcat (partial trigger system))]
-   ::work     [:merge [::retry? ::trigger]]
-   ::fire     [:sync (keep fire)]
+;;   ::work [:merge [::retry? ::trigger]]
+   ::fire     [:sync ::trigger (keep fire)]
    ::affect   [:blocking ::fire (map affect)]
    ::success? [:sync ::affect (filter success?)]
    ::failure? [:sync ::affect (remove success?)]
    ::retry?   [:sync ::failure? (filter retry?)]
    ::error?   [:sync ::failure? (remove retry?)]
-   ::out      [:merge [::success? ::error?]]})
+;;   ::out      [:merge [::success? ::error?]]
+   })
 
 (defn start-system
   [system]
   (let [sources (wf/init-sources ::event)
-        workflow (->> system
-                      workflow
-                      (wf/build-workflow sources))]
+        workflow (-> system
+                     workflow
+                     (wf/build-workflow sources))]
     (assoc system ::workflow workflow)))
 
 (defn stop-system!
@@ -170,3 +181,9 @@
       (wf/stop-workflow! workflow)
       (dissoc system ::workflow))
     system))
+
+(defn schema
+  []
+  (->> schema-txes
+       (into event/schema-txes)
+       (into rule/schema-txes)))
