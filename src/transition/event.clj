@@ -33,7 +33,6 @@
      {:db/ident       ::cause
       :db/valueType   :db.type/ref
       :db/cardinality :db.cardinality/one
-      :db/unique      :db.unique/identity
       :db/doc         "Cause of this event"}]])
 
 (defn event>entity
