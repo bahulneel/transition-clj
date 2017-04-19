@@ -11,13 +11,17 @@
   [db tx]
   (:db-after (d/with db tx)))
 
+(defn db-with-txes
+  [db txes]
+  (reduce db-with db txes))
+
 (defn empty-db
   [name schema]
   (let [uri (str "datomic:mem://" name)]
     (d/delete-database uri)
     (d/create-database uri)
     (-> (d/db (d/connect uri))
-        (db-with rule/schema)
+        (db-with-txes rule/schema-txes)
         (db-with schema))))
 
 (def schema
@@ -44,7 +48,7 @@
           id (d/squuid)
           event [::create-customer #:customer {:name name}]
           [tx events] (with-redefs [datomic.api/squuid (constantly id)]
-                        (rule/fire create-customer db event))
+                        (rule/fire create-customer db event {}))
           db' (db-with db tx)]
       (t/is (= [[:transition.rule/applicable?
                  (get create-customer :transition.rule/precondition)
@@ -60,7 +64,7 @@
           db (db-with (empty-db ::db schema)
                       [#:customer {:name name :id id}])
           event [::create-customer #:customer {:name name}]
-          res (rule/fire create-customer db event)]
+          res (rule/fire create-customer db event {})]
       (t/is (nil? res))))
 
   (t/testing "firing a rule then transacting twice"
@@ -69,9 +73,8 @@
           id (d/squuid)
           event [::create-customer #:customer {:name name}]
           [tx events] (with-redefs [datomic.api/squuid (constantly id)]
-                        (rule/fire create-customer db event))
+                        (rule/fire create-customer db event {}))
           db' (db-with db tx)]
       (t/is (thrown-with-msg? ExceptionInfo
                               #"TX no longer applicable"
                               (db-with db' tx))))))
-
