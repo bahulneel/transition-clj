@@ -87,8 +87,8 @@
 
 (defn trigger
   [system [event context]]
-  (println "trigger" event context)
   (let [{:keys [::conn ::rules]} system]
+    #_(println "Trigger" event)
     (map (fn [rule]
            {::conn    conn
             ::event   event
@@ -98,12 +98,16 @@
 
 (defn fire
   [trigger]
-  #_(println "fire" trigger)
   (let [{:keys [::conn ::event ::rule ::context]} trigger
         {:keys [::tx-meta]} context
         db (d/db conn)
         [tx events] (rule/fire rule db (::event/event event) tx-meta)
         trigger' (update-in trigger [::context ::attempt] (fnil inc 0))]
+    #_(println "Fire"
+             (not (nil? (or (seq tx) (seq events))))
+             (::rule/action rule)
+             ":-"
+             (pr-str (::event/event event)))
     (when (or (seq tx) (seq events))
       {::trigger trigger'
        ::tx      tx
@@ -111,8 +115,6 @@
 
 (defn affect
   [effect]
-  (println "affect")
-  #_(clojure.pprint/pprint effect)
   (let [{:keys [::trigger ::tx ::events]} effect
         {:keys [::conn ::context ::event]} trigger
         {:keys [::tx-meta]} context
