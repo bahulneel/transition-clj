@@ -36,7 +36,8 @@
   (s/keys :req [::context ::events ::tx-report]))
 
 (s/def ::failure
-  (s/keys :req [::trigger ::error]))
+  (s/keys :req [::trigger ::error]
+          :opt [::tx]))
 
 (s/def ::context
   (s/keys :req [::max-attempts]
@@ -120,24 +121,24 @@
                                                  [])
                                                events))
         tx-meta (cond-> {:db/id "datomic-tx"}
-                        tx-meta (merge tx-meta)
-                        event (assoc ::cause (str (::event/id event)))
-                        (seq events) (assoc ::effect
-                                            (mapv (comp str ::event/id)
-                                                  events)))
+                  tx-meta (merge tx-meta)
+                  event (assoc ::cause (str (::event/id event)))
+                  (seq events) (assoc ::effect
+                                      (mapv (comp str ::event/id)
+                                            events)))
 
-        tx-report (d/transact conn (->> event-tx
-                                        (into [tx-meta])
-                                        (into tx)))]
-    #_(prn tx)
+        full-tx (->> event-tx
+                     (into [tx-meta])
+                     (into tx))
+        tx-report (d/transact conn full-tx)]
     (try
       {::context   context
        ::events    events
        ::tx-report @tx-report}
       (catch Exception e
-       #_ (prn e)
         {::trigger trigger
-         ::error   e}))))
+         ::error   e
+         ::tx full-tx}))))
 
 (defn success?
   [x]
@@ -150,7 +151,8 @@
 (defn retry?
   [failure]
   (when (failure? failure)
-    (let [{:keys [::context]} failure
+    (let [{:keys [::trigger]} failure
+          {:keys [::context]} trigger
           {:keys [::attempt ::max-attempts]} context]
       (< attempt max-attempts))))
 
