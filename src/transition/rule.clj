@@ -86,7 +86,7 @@
                           (d/q q db [(vals consts)] [(vals args)])))]
           #_(prn b)
           b))
-      {})))
+      [{}])))
 
 (def schema-txes
   '[[{:db/ident ::applicable?

@@ -44,18 +44,19 @@
 (t/deftest rule-firing
   (t/testing "Unification"
     (let [db (empty-db ::db schema)]
-      (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg1 :v1 :arg2 ?v2}]
-                                                        :event [:match {}]}
-                                    db
-                                    [:event {:arg1 :v1 :arg2 :v2}]
-                                    {}))))
+      (t/is (= [:match {:arg2 :v2}]
+               (first (second (rule/fire '#:transition.rule {:action [:event {:arg1 :v1 :arg2 ?v2}]
+                                                             :event [:match {:arg2 ?v2}]}
+                                         db
+                                         [:event {:arg1 :v1 :arg2 :v2}]
+                                         {})))))
       (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg2 ?v2 :arg1 :v1}]
-                                                        :event [:match {}]}
+                                                        :event [:match {:v2 ?v2}]}
                                     db
                                     [:event {:arg1 :v1 :arg2 :v2}]
                                     {}))))
       (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg1 :v1 :arg2 ?v2}]
-                                                        :event [:match {}]}
+                                                        :event [:match {:v2 ?v2}]}
                                     db
                                     [:event {:arg2 :v2 :arg1 :v1}]
                                     {}))))))
