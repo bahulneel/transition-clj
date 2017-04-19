@@ -2,10 +2,11 @@
   (:require [clojure.spec :as s]
             [lab79.datomic-spec]
             [datomic.api :as d]
-            [clojure.core.unify :as u]))
+            [clojure.core.unify :as u]
+            [clojure.walk :as walk]))
 
 (s/def ::definition
-  (s/keys :req [::event ::action ::effect]
+  (s/keys :req [::action (or ::event ::effect)]
           :opt [::precondition ::context ::aggregate]))
 
 (s/def ::event
@@ -15,7 +16,8 @@
   (s/tuple keyword? ::args))
 
 (s/def ::args
-  (s/map-of keyword? :datalog/variable))
+  (s/map-of keyword? (s/or :variable :datalog/variable
+                           :arg :datomic-spec.value/any)))
 
 (s/def ::aggregate
   (s/map-of symbol? any?))
@@ -73,15 +75,18 @@
         arg-vars (vec (keys args))
         in (vector '$ [const-vars] [arg-vars])
         q {:find find :in in :where context}]
-    #_(prn q)
-    (let [b (seq (map (fn [match]
-                        (reduce-kv (fn [b var alias]
-                                     (assoc b var (get b alias)))
-                                   (zipmap find match)
-                                   alias))
-                      (d/q q db [(vals consts)] [(vals args)])))]
-      #_(prn b)
-      b)))
+    (if (seq find)
+      (do
+        #_(prn q)
+        (let [b (seq (map (fn [match]
+                            (reduce-kv (fn [b var alias]
+                                         (assoc b var (get b alias)))
+                                       (zipmap find match)
+                                       alias))
+                          (d/q q db [(vals consts)] [(vals args)])))]
+          #_(prn b)
+          b))
+      {})))
 
 (def schema-txes
   '[[{:db/ident ::applicable?
@@ -98,6 +103,14 @@
                                                  {:precondition precondition
                                                   :data         data}))))}}]])
 
+(defn normalise
+  [event]
+  (walk/postwalk (fn [x]
+                   (if (map? x)
+                     (into (sorted-map) x)
+                     x))
+                 event))
+
 (defn fire
   [rule db ground-event consts]
   (let [{:keys [::event
@@ -106,6 +119,8 @@
                 ::effect
                 ::context
                 ::precondition]} rule
+        ground-event (normalise ground-event)
+        action (normalise action)
         const-lvars (into {}
                           (map (fn [[k v]]
                                  [(keyword>lvar k) v]))

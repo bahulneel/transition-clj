@@ -42,6 +42,24 @@
        :event        [::customer-created #:customer {:name ?name :id ?id}]})
 
 (t/deftest rule-firing
+  (t/testing "Unification"
+    (let [db (empty-db ::db schema)]
+      (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg1 :v1 :arg2 ?v2}]
+                                                        :event [:match {}]}
+                                    db
+                                    [:event {:arg1 :v1 :arg2 :v2}]
+                                    {}))))
+      (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg2 ?v2 :arg1 :v1}]
+                                                        :event [:match {}]}
+                                    db
+                                    [:event {:arg1 :v1 :arg2 :v2}]
+                                    {}))))
+      (t/is (not (empty? (rule/fire '#:transition.rule {:action [:event {:arg1 :v1 :arg2 ?v2}]
+                                                        :event [:match {}]}
+                                    db
+                                    [:event {:arg2 :v2 :arg1 :v1}]
+                                    {}))))))
+
   (t/testing "firing a matching rule with a met precondition"
     (let [db (empty-db ::db schema)
           name "Ford Prefect"
