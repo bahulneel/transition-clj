@@ -7,4 +7,5 @@
                  [org.clojure/core.async "0.3.442"]
                  [lab79/datomic-spec "0.2.0-alpha6"]
                  [org.clojure/core.unify "0.5.7"]
-                 [com.datomic/datomic-free "0.9.5561" :scope "test"]])
+                 [com.datomic/datomic-free "0.9.5561" :scope "test"]]
+  :cljsbuild {:builds []})
